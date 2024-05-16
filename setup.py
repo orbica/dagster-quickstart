@@ -7,6 +7,8 @@ setup(
         "dagster",
         "dagster-cloud",
         "pandas",
+        "google-cloud-run",
+        "pint",
     ],
     extras_require={"dev": ["dagster-webserver", "pytest"]},
 )

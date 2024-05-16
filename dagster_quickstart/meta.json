@@ -1,0 +1,47 @@
+{
+  "name": "projects/astute-fort-412223/locations/us-central1/jobs/job-quickstart/executions/job-quickstart-mkl7j",
+  "uid": "47d9a216-7be3-4c5c-9cc1-d8cacfe9531e",
+  "generation": "1",
+  "createTime": "2024-05-16T03: 41: 04.824606Z",
+  "updateTime": "2024-05-16T03: 41: 04.824606Z",
+  "launchStage": "GA",
+  "job": "job-quickstart",
+  "parallelism": 10,
+  "taskCount": 10,
+  "template": {
+    "containers": [
+      {
+        "image": "us-central1-docker.pkg.dev/astute-fort-412223/cloud-run-source-deploy/job-quickstart@sha256:a5f2fa78eeab7ecdd8ce2aa3d2a34cac5d4405bf302438c248972db7da1db5dd",
+        "env": [
+          {
+            "name": "SLEEP_MS",
+            "value": "10000"
+          },
+          {
+            "name": "FAIL_RATE",
+            "value": "0.33"
+          }
+        ],
+        "resources": {
+          "limits": {
+            "cpu": "1000m",
+            "memory": "512Mi"
+          }
+        }
+      }
+    ],
+    "maxRetries": 1,
+    "timeout": "300s",
+    "serviceAccount": "783510602082-compute@developer.gserviceaccount.com",
+    "executionEnvironment": "EXECUTION_ENVIRONMENT_GEN2"
+  },
+  "reconciling": true,
+  "conditions": [
+    {
+      "type": "Completed",
+      "state": "CONDITION_PENDING"
+    }
+  ],
+  "logUri": "https: //console.cloud.google.com/logs/viewer?project=astute-fort-412223&advancedFilter=resource.type%3D%22cloud_run_job%22%0Aresource.labels.job_name%3D%22job-quickstart%22%0Aresource.labels.location%3D%22us-central1%22%0Alabels.%22run.googleapis.com/execution_name%22%3D%22job-quickstart-mkl7j%22",
+  "etag": ""CNCAlrIGELD6mYkD/cHJvamVjdHMvYXN0dXRlLWZvcnQtNDEyMjIzL2xvY2F0aW9ucy91cy1jZW50cmFsMS9qb2JzL2pvYi1xdWlja3N0YXJ0L2V4ZWN1dGlvbnMvam9iLXF1aWNrc3RhcnQtbWtsN2o""
+}
