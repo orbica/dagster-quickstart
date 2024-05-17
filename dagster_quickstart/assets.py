@@ -13,7 +13,7 @@ from dagster import (
 )
 from dagster_quickstart.configurations import HNStoriesConfig
 
-from google.cloud import run_v2
+from google.cloud.run_v2 import ExecutionsClient, JobsClient, RunJobRequest
 from google.protobuf.json_format import MessageToDict
 from pint import UnitRegistry
 import time
@@ -48,35 +48,8 @@ def hackernews_top_stories(config: HNStoriesConfig) -> MaterializeResult:
         }
     )
 
-def get_run_execution_status(name: str):
-    # Fetch data about a Google Cloud Run job execution
-    # https://cloud.google.com/python/docs/reference/run/latest/google.cloud.run_v2.types.Execution
-    client = run_v2.ExecutionsClient()
-
-    request = run_v2.GetExecutionRequest(name=name)
-    status = client.get_execution(request)
-    complete_count = sum([
-        status.succeeded_count,
-        status.failed_count,
-        status.cancelled_count,
-    ])
-
-    return {
-        "complete_count": complete_count,
-        "complete_percent": complete_count / status.task_count * 100,
-        "running_count": status.running_count,
-        "succeeded": status.succeeded_count,
-        "failed": status.failed_count,
-        "cancelled": status.cancelled_count,
-        "retried": status.retried_count,
-    }
-
 
 def get_standard_quantity(quantity_string, standard_unit):
-    # Using re.compile() + re.match() + re.groups()
-    # Splitting text and number in string
-    # temp = re.compile("([a-zA-Z]+)([0-9]+)")
-    # res = temp.match(test_str).groups()
     ureg = UnitRegistry()
 
     # Handle unit variants
@@ -87,17 +60,24 @@ def get_standard_quantity(quantity_string, standard_unit):
             
     return qty.to(standard_unit).magnitude
 
+@asset
+def upstream():
+    return [1, 2, 3]
 
 @asset
-def job_quickstart(context: OpExecutionContext) -> MaterializeResult:
+def job_quickstart(context: OpExecutionContext, upstream) -> None:
     """Execute a GCP Cloud Run Job"""
 
+    # configure job execution
     job_name = "job-quickstart"
     location = "us-central1"
     project = "astute-fort-412223"
-    job_timeout = 15 * 60
+    job_timeout_seconds = 15 * 60
+    status_poll_seconds = 5
 
-    request = run_v2.RunJobRequest(
+    context.log.info(f"input: {upstream}")
+
+    request = RunJobRequest(
         name=f"projects/{project}/locations/{location}/jobs/{job_name}", 
         # https://cloud.google.com/python/docs/reference/run/latest/google.cloud.run_v2.types.RunJobRequest.Overrides
         overrides={
@@ -109,50 +89,65 @@ def job_quickstart(context: OpExecutionContext) -> MaterializeResult:
                     }]
             }],
             "timeout": f"{str(5 * 60)}s",
-            "task_count" : 10
+            "task_count" : len(upstream)
         }
     )
+
+    operation = JobsClient().run_job(request)
     
-    operation = run_v2.JobsClient().run_job(request)
+    # execution metadata
     operation_metadata = MessageToDict(operation.metadata._pb)
+    context.log.debug(f"Operation Metadata:\n{operation_metadata}")
+
     operation_name = operation_metadata.get("name")
     execution_id = operation_name.split("/")[-1]
-    task_count = operation_metadata.get("taskCount")
-    task_parallelism = operation_metadata.get("parallelism")
     task_container = operation_metadata.get("template").get("containers")[0]
     resources_per_task = task_container.get("resources").get("limits")
     
-    # show full config for the operation
-    context.log.debug(f"Operation Metadata:\n{operation_metadata}")
+    context.add_output_metadata({
+        "task_count": operation_metadata.get("taskCount"),
+        "task_parallelism": operation_metadata.get("parallelism"),
+        "task_cpu_millicore": get_standard_quantity(resources_per_task.get("cpu"), "millicore"),
+        "task_memory_GiB": get_standard_quantity(resources_per_task.get("memory"), "GiB"),
+        "details": UrlMetadataValue(f"https://console.cloud.google.com/run/jobs/executions/details/{location}/{execution_id}/tasks?project={project}"),
+    })
     
     # Monitor job execution
     context.log.info(f"Starting execution of '{operation_name}'...")
     context.log.info(f"View detailed task execution logs at:\n{operation_metadata.get('logUri')}")
 
+    # Fetch data about a Google Cloud Run job execution
+    # https://cloud.google.com/python/docs/reference/run/latest/google.cloud.run_v2.types.Execution
+    executions_client = ExecutionsClient()
     while operation.running():
-        status = get_run_execution_status(operation_name)
-        context.log.info(f"{round(status.get('complete_percent', 0))}% tasks completed ({status.get('complete_count', 0)}/{task_count}); {status.get('running_count', 0)} running")
-        time.sleep(10)
+        time.sleep(status_poll_seconds)
+        try:
+            status = executions_client.get_execution(name=operation_name)
+        
+            complete_count = sum([
+                status.succeeded_count,
+                status.failed_count,
+                status.cancelled_count,
+            ])
+            complete_percent = complete_count / status.task_count * 100
+            retry_percent = status.retried_count / status.task_count * 100
 
-    response = MessageToDict(operation.result(timeout=job_timeout)._pb)
-    
-    # show full results for the completed execution
-    context.log.debug(f"Response:\n{response}")
+            context.add_output_metadata({
+                "retry_percent": retry_percent,
+            })
+            
+            context.log.info(f"{round(complete_percent)}% tasks completed ({complete_count}/{status.task_count}); {status.running_count} running")
+        
+        except Exception as error:
+            context.log.warn(f"unable to get execution '{operation_name}':\n{error}\n\nSkipping status check...")
 
-    run_metadata = {
-        "task_count": task_count,
-        "parallelism": task_parallelism,
-        "retry_percent": response.get("retriedCount") / task_count * 100,
-        "task_cpu_millicore": get_standard_quantity(resources_per_task.get("cpu"), "millicore"),
-        "task_memory_GiB": get_standard_quantity(resources_per_task.get("memory"), "GiB"),
-        "details": UrlMetadataValue(f"https://console.cloud.google.com/run/jobs/executions/details/{location}/{execution_id}/tasks?project={project}"),
-    }
-
-    if response.get("retriedCount") > 0:
-        raise Failure(
-            description="Retries > 0",
-            metadata=run_metadata,
-        )
-
-    return MaterializeResult(metadata=run_metadata)
+    # handle completion
+    response = None
+    try:
+        response = operation.result(timeout=job_timeout_seconds)
+    except Exception:
+        raise Failure(description="Cloud Run Job Failure")
+    finally:
+        context.log.debug(f"Response:\n{response}") 
+        # response_dict = MessageToDict(response._pb)
     

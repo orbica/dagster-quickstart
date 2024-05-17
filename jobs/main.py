@@ -5,6 +5,7 @@ import sys
 import time
 
 # Retrieve Job-defined env vars
+DATA_PATH = os.getenv("CLOUD_RUN_DATA_PATH", ".")
 TASK_INDEX = os.getenv("CLOUD_RUN_TASK_INDEX", 0)
 TASK_ATTEMPT = os.getenv("CLOUD_RUN_TASK_ATTEMPT", 0)
 # Retrieve User-defined env vars
@@ -27,6 +28,23 @@ def main(sleep_ms=0, fail_rate=0):
     # Simulate errors
     random_failure(float(fail_rate))
 
+    cwd = os.getcwd()
+    print(f"WORKING DIRECTORY: {cwd}")
+    print(f"LS: {os.listdir()}")
+
+    out_file = f"{DATA_PATH}/{TASK_INDEX}.json"
+    print(f"OUT_FILE: {out_file}")
+
+    payload = {
+        "index": TASK_INDEX,
+        "attempt": TASK_ATTEMPT,
+    }
+    print(f"PAYLOAD: {payload}")
+
+    with open(out_file, "w") as file:
+        json.dump(payload, file)
+
+    print(f"LS DATA: {os.listdir(DATA_PATH)}")
     print(f"Completed Task #{TASK_INDEX}.")
 
 
