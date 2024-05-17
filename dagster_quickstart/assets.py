@@ -62,20 +62,27 @@ def get_standard_quantity(quantity_string, standard_unit):
 
 @asset
 def upstream():
-    return [1, 2, 3]
+    # simulate reading config (e.g. data file paths) from remote system and pass array of items to downstream
+    return [
+        "/data/1.json",
+        "/data/2.json",
+        "/data/3.json",
+        "/data/4.json",
+        "/data/5.json",
+    ]
 
 @asset
-def job_quickstart(context: OpExecutionContext, upstream) -> None:
+def multiply_2(context: OpExecutionContext, upstream) -> None:
     """Execute a GCP Cloud Run Job"""
 
     # configure job execution
-    job_name = "job-quickstart"
+    job_name = "multiply_2"
     location = "us-central1"
     project = "astute-fort-412223"
     job_timeout_seconds = 15 * 60
     status_poll_seconds = 5
 
-    context.log.info(f"input: {upstream}")
+    context.log.info(f"upstream: {upstream}")
 
     request = RunJobRequest(
         name=f"projects/{project}/locations/{location}/jobs/{job_name}", 
@@ -85,8 +92,13 @@ def job_quickstart(context: OpExecutionContext, upstream) -> None:
                 "env": [
                     {
                         "name": "FAIL_RATE", 
-                        "value": "0.2"
-                    }]
+                        "value": "0.2",
+                    },
+                    {
+                        "name": "UPSTREAM",
+                        "value": json.dumps(upstream)
+                    }
+                ]
             }],
             "timeout": f"{str(5 * 60)}s",
             "task_count" : len(upstream)

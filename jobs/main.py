@@ -5,13 +5,12 @@ import sys
 import time
 
 # Retrieve Job-defined env vars
-DATA_PATH = os.getenv("CLOUD_RUN_DATA_PATH", ".")
 TASK_INDEX = os.getenv("CLOUD_RUN_TASK_INDEX", 0)
 TASK_ATTEMPT = os.getenv("CLOUD_RUN_TASK_ATTEMPT", 0)
 # Retrieve User-defined env vars
 SLEEP_MS = os.getenv("SLEEP_MS", 0)
 FAIL_RATE = os.getenv("FAIL_RATE", 0)
-
+DATA_PATH = os.getenv("DATA_PATH", ".")
 
 # Define main script
 def main(sleep_ms=0, fail_rate=0):
