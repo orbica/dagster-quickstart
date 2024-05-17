@@ -60,19 +60,16 @@ def get_standard_quantity(quantity_string, standard_unit):
             
     return qty.to(standard_unit).magnitude
 
+
 @asset
 def upstream():
     # simulate reading config (e.g. data file paths) from remote system and pass array of items to downstream
-    return [
-        "/data/1.json",
-        "/data/2.json",
-        "/data/3.json",
-        "/data/4.json",
-        "/data/5.json",
-    ]
+    output_dir = "outputs"
+    return output_dir
+
 
 @asset
-def multiply_2(context: OpExecutionContext, upstream) -> None:
+def multiply_2(context: OpExecutionContext, upstream) -> str:
     """Execute a GCP Cloud Run Job"""
 
     # configure job execution
@@ -81,8 +78,7 @@ def multiply_2(context: OpExecutionContext, upstream) -> None:
     project = "astute-fort-412223"
     job_timeout_seconds = 15 * 60
     status_poll_seconds = 5
-
-    context.log.info(f"upstream: {upstream}")
+    output_path = f"{job_name}/{context.run_id}"
 
     request = RunJobRequest(
         name=f"projects/{project}/locations/{location}/jobs/{job_name}", 
@@ -95,8 +91,12 @@ def multiply_2(context: OpExecutionContext, upstream) -> None:
                         "value": "0.2",
                     },
                     {
-                        "name": "UPSTREAM",
-                        "value": json.dumps(upstream)
+                        "name": "INPUT_UPSTREAM",
+                        "value": upstream
+                    },
+                    {
+                        "name": "OUTPUT_PATH",
+                        "value": output_path
                     }
                 ]
             }],
@@ -122,6 +122,7 @@ def multiply_2(context: OpExecutionContext, upstream) -> None:
         "task_cpu_millicore": get_standard_quantity(resources_per_task.get("cpu"), "millicore"),
         "task_memory_GiB": get_standard_quantity(resources_per_task.get("memory"), "GiB"),
         "details": UrlMetadataValue(f"https://console.cloud.google.com/run/jobs/executions/details/{location}/{execution_id}/tasks?project={project}"),
+        "output_path": output_path,
     })
     
     # Monitor job execution
@@ -163,3 +164,4 @@ def multiply_2(context: OpExecutionContext, upstream) -> None:
         context.log.debug(f"Response:\n{response}") 
         # response_dict = MessageToDict(response._pb)
     
+    return output_path
