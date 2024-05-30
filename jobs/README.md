@@ -2,7 +2,6 @@
 ```
 gcloud beta run jobs deploy multiply \
   --source . \
-  --tasks 5 \
   --set-env-vars SLEEP_MS=10000 \
   --set-env-vars FAIL_RATE=0 \
   --set-env-vars DATA_PATH=/workspace/data \
